@@ -1,6 +1,7 @@
 Manifest-version: 1.0
 X-Compile-Source-JDK: @source.jdk@
 X-Compile-Target-JDK: @target.jdk@
+Automatic-Module-Name: javax.servlet.api
 
 Name: javax/servlet/
 Specification-Title: Java API for Servlets
