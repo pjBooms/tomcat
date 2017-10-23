@@ -1466,7 +1466,6 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             if (!moduleNames.isEmpty()) {
                 Configuration cf = parent.configuration().resolve(finder, ModuleFinder.of(), moduleNames);
                 ModuleLayer moduleLayer = parent.defineModulesWithOneLoader(cf, getParent());
-//                moduleLayer.modules().forEach(m -> m.addReads(getParent().getUnnamedModule())); //does not work
                 moduleLayerLoader = moduleLayer.findLoader(moduleNames.get(0));
             }
         }
