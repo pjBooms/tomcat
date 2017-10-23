@@ -1,3 +1,17 @@
+## About This Fork
+
+This fork allows Tomcat web applications to be written and run as Jigsaw modules!
+If you put all your dependencies (including your own classes that have to be packed as a modular jar) into `/WEB-INF/modules`
+of the resulting WAR file instead of `/WEB-INF/lib` then the jars will be loaded as Jigsaw modules.
+Thus `/WEB-INF/modules` stands for complete analog of `--module-path` for web applications.
+Note, that jars from `/WEB-INF/lib` are loaded in Unnamed Jigsaw module (regardless of this fork),
+thus it is a complete analog of `-cp` for web applications.
+So with this fork you can follow the same migration path as suggested by Jigsaw for `-classpath` applications,
+gradually moving jars form `/WEB-INF/lib` to `/WEB-INF/modules` modularising your web application this way.
+
+You may try my modular web application example with the fork to see that it actually works:
+https://github.com/pjBooms/modular-war-example
+
 ## Welcome to Apache Tomcat!
 
 ### What Is It?
