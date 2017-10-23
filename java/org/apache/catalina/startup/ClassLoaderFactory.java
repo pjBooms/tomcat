@@ -18,15 +18,18 @@ package org.apache.catalina.startup;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.module.Configuration;
+import java.lang.module.ModuleFinder;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -217,23 +220,56 @@ public final class ClassLoaderFactory {
             }
         }
 
-        // Construct the class loader itself
-        final URL[] array = set.toArray(new URL[set.size()]);
+//        // Construct the class loader itself
+//        final URL[] array = set.toArray(new URL[set.size()]);
+//        if (log.isDebugEnabled())
+//            for (int i = 0; i < array.length; i++) {
+//                log.debug("  location " + i + " is " + array[i]);
+//            }
+//
+//        return AccessController.doPrivileged(
+//                new PrivilegedAction<URLClassLoader>() {
+//                    @Override
+//                    public URLClassLoader run() {
+//                        if (parent == null)
+//                            return new URLClassLoader(array);
+//                        else
+//                            return new URLClassLoader(array, parent);
+//                    }
+//                });
+//
+        // Create module layer instead of URLClassLoader for Tomcat jars
+        final Path[] array = set.stream().map(ClassLoaderFactory::getPath).filter(Objects::nonNull).toArray(Path[]::new);
         if (log.isDebugEnabled())
             for (int i = 0; i < array.length; i++) {
                 log.debug("  location " + i + " is " + array[i]);
             }
 
         return AccessController.doPrivileged(
-                new PrivilegedAction<URLClassLoader>() {
+                new PrivilegedAction<ClassLoader>() {
                     @Override
-                    public URLClassLoader run() {
-                        if (parent == null)
-                            return new URLClassLoader(array);
-                        else
-                            return new URLClassLoader(array, parent);
+                    public ClassLoader run() {
+                        ModuleFinder finder = ModuleFinder.of(array);
+                        ModuleLayer parentLayer = parent == null? ModuleLayer.boot() : parent.getUnnamedModule().getLayer();
+                        List<String> moduleNames = finder.findAll().stream().map(m -> m.descriptor().name()).collect(Collectors.toList());
+                        if (!moduleNames.isEmpty()) {
+                            log.debug("Found modules: " + moduleNames);
+                            Configuration cf = parentLayer.configuration().resolve(finder, ModuleFinder.of(), moduleNames);
+                            ModuleLayer moduleLayer = parentLayer.defineModulesWithOneLoader(cf, parent == null ? ClassLoader.getSystemClassLoader() : parent);
+                            return moduleLayer.findLoader(moduleNames.get(0));
+                        } else {
+                            return parent;
+                        }
                     }
                 });
+    }
+
+    private static Path getPath(URL url) {
+        try {
+            return Paths.get(url.toURI());
+        } catch (URISyntaxException e) {
+            return null;
+        }
     }
 
     private static boolean validateFile(File file,
