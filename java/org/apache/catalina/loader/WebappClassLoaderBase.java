@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
+import java.lang.module.Configuration;
+import java.lang.module.ModuleFinder;
 import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -29,6 +31,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Paths;
 import java.security.AccessControlException;
 import java.security.AccessController;
 import java.security.CodeSource;
@@ -57,6 +60,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.jar.Attributes;
 import java.util.jar.Attributes.Name;
 import java.util.jar.Manifest;
+import java.util.stream.Collectors;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.Globals;
@@ -66,6 +70,7 @@ import org.apache.catalina.LifecycleListener;
 import org.apache.catalina.LifecycleState;
 import org.apache.catalina.WebResource;
 import org.apache.catalina.WebResourceRoot;
+import org.apache.catalina.startup.Catalina;
 import org.apache.catalina.webresources.TomcatURLStreamHandlerFactory;
 import org.apache.juli.WebappProperties;
 import org.apache.juli.logging.Log;
@@ -316,6 +321,8 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
      * the system class loader and the last non-null result used.
      */
     private ClassLoader javaseClassLoader;
+
+    private ClassLoader moduleLayerLoader;
 
 
     /**
@@ -1237,6 +1244,13 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
                 }
             }
 
+            if (moduleLayerLoader != null) {
+                try {
+                    return moduleLayerLoader.loadClass(name);
+                } catch (ClassNotFoundException e) {
+                    // Ignore
+                }
+            }
             // (2) Search local repositories
             if (log.isDebugEnabled())
                 log.debug("  Searching local repositories");
@@ -1441,6 +1455,19 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
                 localRepositories.add(jar.getURL());
                 jarModificationTimes.put(
                         jar.getName(), Long.valueOf(jar.getLastModified()));
+            }
+        }
+
+        WebResource modules = resources.getResource("/WEB-INF/modules");
+        if (modules.exists()) {
+            ModuleFinder finder = ModuleFinder.of(Paths.get(modules.getCanonicalPath()));
+            ModuleLayer parent = Catalina.class.getModule().getLayer();
+            List<String> moduleNames = finder.findAll().stream().map(m -> m.descriptor().name()).collect(Collectors.toList());
+            if (!moduleNames.isEmpty()) {
+                Configuration cf = parent.configuration().resolve(finder, ModuleFinder.of(), moduleNames);
+                ModuleLayer moduleLayer = parent.defineModulesWithOneLoader(cf, getParent());
+//                moduleLayer.modules().forEach(m -> m.addReads(getParent().getUnnamedModule())); //does not work
+                moduleLayerLoader = moduleLayer.findLoader(moduleNames.get(0));
             }
         }
 
